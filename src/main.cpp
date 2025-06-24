@@ -11,6 +11,32 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+/* 
+    Automatic font size according to the number of characters in the message
+    21 characters per line and 8 lines total at size 1
+*/
+int pickBestFontSize(String text) {
+  const int screenW = 128;
+  const int screenH = 64;
+
+  for (int size = 4; size >= 1; size--) {
+    // each character is 6 pixels wide and 8 pixels tall at size 1
+    int charW = 6 * size;
+    int charH = 8 * size;
+
+    int charsPerLine = screenW / charW;
+    int linesPerScreen = screenH / charH;
+    int maxChars = charsPerLine * linesPerScreen;
+
+    if (text.length() <= maxChars) {
+      return size;
+    }
+  }
+
+  return 1; // default to smallest if nothing fits
+}
+
+
 String inputBuffer = "";
 
 void processJson(String jsonStr) {
