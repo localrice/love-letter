@@ -6,6 +6,7 @@
 #include <LittleFS.h>
 #include <ESP8266WiFi.h>
 #include <ESPAsyncWebServer.h>
+#include <WebSocketsClient.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -14,7 +15,39 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+WebSocketsClient webSocket;
 AsyncWebServer server(80);
+
+// forward declaration
+void processJson(String jsonStr);
+
+void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
+  switch (type) {
+    case WStype_DISCONNECTED:
+      Serial.println("[WS] Disconnected");
+      break;
+    case WStype_CONNECTED:
+      Serial.println("[WS] Connected");
+      webSocket.sendTXT("ESP8266 connected");
+      break;
+    case WStype_TEXT:
+      Serial.printf("[WS] Received: %s\n", payload);
+      processJson(String((char*)payload));  // show on screen
+      break;
+  }
+}
+
+void connectWebSocket() {
+  // Replace with your server IP/domain and port
+  const char* host = "192.168.198.155";
+  const uint16_t port = 8765;
+
+  webSocket.begin(host, port, "/");
+  webSocket.onEvent(onWebSocketEvent);
+  webSocket.setReconnectInterval(5000); // Try to reconnect every 5s
+}
+
+
 /*
   Create Access Point (AP) mode for WiFi setup
   This function sets up an access point with the SSID "ESP-Setup"
@@ -147,8 +180,16 @@ int pickBestFontSize(String text) {
 }
 
 
-String inputBuffer = "";
 
+/*
+  Function to process incoming JSON messages from the WebSocket
+  It expects a JSON object with the following structure:
+  {
+    "size": <int>, // text size (1-4)
+    "pos": [<x>, <y>], // cursor position
+    "text": "<string>" // text to display
+  }
+*/
 void processJson(String jsonStr) {
   StaticJsonDocument<256> doc;
   DeserializationError error = deserializeJson(doc, jsonStr);
@@ -205,6 +246,7 @@ void setup() {
     display.display();
     startAPMode();
   } else {
+    connectWebSocket();
     display.clearDisplay();
     display.setCursor(0, 0);
     display.println("WiFi Connected!");
@@ -213,13 +255,5 @@ void setup() {
 }
 
 void loop() {
-  while (Serial.available()) {
-    char ch = Serial.read();
-    if (ch == '\n') {
-      processJson(inputBuffer);
-      inputBuffer = "";
-    } else {
-      inputBuffer += ch;
-    }
-  }
+  webSocket.loop();
 }
