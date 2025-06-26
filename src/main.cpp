@@ -27,6 +27,7 @@ void startAPMode();
 bool connectToWifi();
 int pickBestFontSize(String text);
 void processJson(String jsonStr);
+void displayMessageLines(const std::vector<String>& lines, int size = 1, int x = 0, int y = 0);
 
 void setup() {
   Wire.begin(D2, D1);
@@ -42,25 +43,22 @@ void setup() {
     Serial.println(F("Failed to mount LittleFS"));
     return;
   }
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println("Connecting to WiFi...");
-  display.display();
+  displayMessageLines({
+    "Connecting to WiFi...",
+  }, 2);
 
   if (!connectToWifi()) {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Starting AP Mode");
-    display.display();
+    displayMessageLines({
+      "Failed to connect to WiFi",
+      "Starting AP mode..."
+    }, 2);
     startAPMode();
   } else {
     connectWebSocket();
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("WiFi Connected!");
-    display.display();
+    displayMessageLines({
+      "Connected to WiFi",
+      "Connecting to WebSocket..."
+    }, 2);
   }
 }
 
@@ -82,6 +80,10 @@ void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
     case WStype_CONNECTED:
       Serial.println("[WS] Connected");
+      displayMessageLines({
+        "WebSocket connected",
+        "Waiting for messages..."
+      }, 2);
       webSocket.sendTXT("ESP8266 connected");
       break;
 
@@ -272,4 +274,28 @@ void processJson(String jsonStr) {
     display.println(doc["text"].as<String>());
     display.display();
   }
+}
+
+/*
+  Displays multiple lines of text on the OLED display
+  This function takes a vector of strings and displays them on the screen.
+
+  Parameters:
+  - lines: A vector of strings to display.
+  - size: The text size multiplier (default is 1).
+  - x: The x-coordinate for the text cursor (default is 0).
+  - y: The y-coordinate for the text cursor (default is 0).
+
+  Example usage:
+    displayMessageLines({ "Hello", "World" }, 2);
+*/
+void displayMessageLines(const std::vector<String>& lines, int size, int x, int y) {
+  display.clearDisplay();
+  display.setTextSize(size);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(x, y);
+  for (const auto& line : lines) {
+    display.println(line);
+  }
+  display.display();
 }
