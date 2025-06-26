@@ -13,23 +13,78 @@
 #define OLED_RESET -1
 #define SCREEN_ADDRESS 0x3C
 
+#define WIFI_CONNECTION_MAX_ATTEMPTS 20
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 WebSocketsClient webSocket;
 AsyncWebServer server(80);
 
-// forward declaration
+// Forward declarations
+void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length);
+void connectWebSocket();
+void startAPMode();
+bool connectToWifi();
+int pickBestFontSize(String text);
 void processJson(String jsonStr);
 
+void setup() {
+  Wire.begin(D2, D1);
+  Serial.begin(115200);
+  while (!Serial) delay(10);
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+    Serial.println(F("SSD1306 init failed"));
+    while (true);
+  }
+
+  if (!LittleFS.begin()) {
+    Serial.println(F("Failed to mount LittleFS"));
+    return;
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Connecting to WiFi...");
+  display.display();
+
+  if (!connectToWifi()) {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Starting AP Mode");
+    display.display();
+    startAPMode();
+  } else {
+    connectWebSocket();
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("WiFi Connected!");
+    display.display();
+  }
+}
+
+void loop() {
+  webSocket.loop();
+}
+
+/*
+  Callback function that handles WebSocket events as conenction,
+  disconnectiona nd incoming messsage from server
+
+  Incoming messages are expected to be JSON and are parsed by processJson()
+*/
 void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       Serial.println("[WS] Disconnected");
       break;
+
     case WStype_CONNECTED:
       Serial.println("[WS] Connected");
       webSocket.sendTXT("ESP8266 connected");
       break;
+
     case WStype_TEXT:
       Serial.printf("[WS] Received: %s\n", payload);
       processJson(String((char*)payload));  // show on screen
@@ -37,6 +92,12 @@ void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   }
 }
 
+/*
+  Initializes WebSocket client connection to the Flask server
+  This function connects to the WebSocket server at the specified host and port
+  and sets up the event handler for incoming messages.
+  It also sets a reconnection interval to attempt to reconnect if the connection is lost.
+*/
 void connectWebSocket() {
   // Replace with your server IP/domain and port
   const char* host = "192.168.198.155";
@@ -47,10 +108,11 @@ void connectWebSocket() {
   webSocket.setReconnectInterval(5000); // Try to reconnect every 5s
 }
 
-
 /*
   Create Access Point (AP) mode for WiFi setup
   This function sets up an access point with the SSID "ESP-Setup"
+  and serves a simple HTML form to input WiFi credentials.
+  When the form is submitted, it saves the credentials to LittleFS in a JSON file
 */
 void startAPMode() {
   WiFi.softAP("ESP-Setup");
@@ -101,21 +163,17 @@ void startAPMode() {
 }
 
 /*
- *Function to connect to WiFi using credentials stored in LittleFS
- *The credentials are stored in a JSON file named "wifi.json" in the LittleFS filesystem
- *
- *requires the file to have the following structure:
- *  { "ssid": "your_ssid", 
- *    "password": "your_password" 
- *  }
- *returns true if connected successfully, false otherwise
+
+  Function to connect to WiFi using credentials stored in LittleFS
+  The credentials are stored in a JSON file named "wifi.json" in the LittleFS filesystem
+  
+  requires the file to have the following structure:
+    { "ssid": "your_ssid", 
+      "password": "your_password" 
+    }
+  returns true if connected successfully, false otherwise
 */
 bool connectToWifi() {
-  if (!LittleFS.begin()) {
-    Serial.println(F("Failed to mount LittleFS"));
-    return false;
-  }
-
   File file = LittleFS.open("/wifi.json", "r");
   if (!file) {
     Serial.println(F("Failed to open wifi.json"));
@@ -135,12 +193,12 @@ bool connectToWifi() {
   Serial.printf("Connecting to %s...",ssid);
   WiFi.begin(ssid, password);
 
-  int attemps = 0;
+  int attempts = 0;
 
-  while (WiFi.status() != WL_CONNECTED && attemps < 20) {
+  while (WiFi.status() != WL_CONNECTED && attempts < WIFI_CONNECTION_MAX_ATTEMPTS) {
     delay(500);
     Serial.print(".");
-    attemps++;
+    attempts++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -179,8 +237,6 @@ int pickBestFontSize(String text) {
   return 1; // default to smallest if nothing fits
 }
 
-
-
 /*
   Function to process incoming JSON messages from the WebSocket
   It expects a JSON object with the following structure:
@@ -216,44 +272,4 @@ void processJson(String jsonStr) {
     display.println(doc["text"].as<String>());
     display.display();
   }
-}
-
-void setup() {
-  Wire.begin(D2, D1);
-  Serial.begin(115200);
-  while (!Serial) delay(10);
-
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 init failed"));
-    while (true);
-  }
-
-  if (!LittleFS.begin()) {
-    Serial.println(F("Failed to mount LittleFS"));
-    return;
-  }
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println("Connecting to WiFi...");
-  display.display();
-
-  if (!connectToWifi()) {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Starting AP Mode");
-    display.display();
-    startAPMode();
-  } else {
-    connectWebSocket();
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("WiFi Connected!");
-    display.display();
-  }
-}
-
-void loop() {
-  webSocket.loop();
 }
