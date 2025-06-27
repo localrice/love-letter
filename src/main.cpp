@@ -8,15 +8,18 @@
 #include <ESPAsyncWebServer.h>
 #include <WebSocketsClient.h>
 
+
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
 #define SCREEN_ADDRESS 0x3C
 
-#define WIFI_CONNECTION_MAX_ATTEMPTS 20
+#define WIFI_CONNECTION_MAX_ATTEMPTS 100
 #define MODE_BUTTON_PIN 14 // D5 on NodeMCU
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#include <FluxGarage_RoboEyes.h>
+roboEyes roboEyes(&display);
 
 WebSocketsClient webSocket;
 AsyncWebServer server(80);
@@ -53,6 +56,12 @@ void setup() {
     Serial.println(F("SSD1306 init failed"));
     while (true);
   }
+  roboEyes.begin(SCREEN_WIDTH, SCREEN_HEIGHT, 60);  // 60 fps
+  roboEyes.setAutoblinker(ON, 1, 0.5);               
+  roboEyes.setIdleMode(ON, 1.5, 0.5);         
+  roboEyes.anim_confused();
+  roboEyes.open();
+
 
   if (!LittleFS.begin()) {
     Serial.println(F("Failed to mount LittleFS"));
@@ -97,6 +106,10 @@ void loop() {
     currentMode = MODE_DEBUG;
     updateDisplay();
   }
+  if (currentMode== MODE_ROBOT_EYES) {
+    roboEyes.update();
+  }
+  
 }
 
 /*
@@ -227,7 +240,8 @@ bool connectToWifi() {
 
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < WIFI_CONNECTION_MAX_ATTEMPTS) {
-    delay(500);
+    delay(33);             // ~60 FPS for OLED
+    roboEyes.update();
     Serial.print(".");
     attempts++;
   }
@@ -370,11 +384,13 @@ void updateDisplay() {
   Serial.print("[DISPLAY] Updating mode: ");
   Serial.println(currentMode);
 
-  display.clearDisplay();
+  if (currentMode != MODE_ROBOT_EYES) {
+    display.clearDisplay(); // Only clear when not in robot mode
+  }
 
   switch (currentMode) {
     case MODE_ROBOT_EYES:
-      displayMessageLines({ "Robot Eyes :)", "Face Mode" }, 2);
+      // displayMessageLines({ "Robot Eyes :)", "Face Mode" }, 2);
       break;
 
     case MODE_MESSAGE:
@@ -390,6 +406,6 @@ void updateDisplay() {
       break;
   }
 
-  display.display();
+  
 }
 
