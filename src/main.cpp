@@ -14,23 +14,37 @@
 #define SCREEN_ADDRESS 0x3C
 
 #define WIFI_CONNECTION_MAX_ATTEMPTS 20
+#define MODE_BUTTON_PIN 14 // D5 on NodeMCU
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 WebSocketsClient webSocket;
 AsyncWebServer server(80);
 
-// Forward declarations
+enum DisplayMode {
+  MODE_ROBOT_EYES,
+  MODE_MESSAGE,
+  MODE_DEBUG
+};
+
+DisplayMode currentMode = MODE_ROBOT_EYES;
+bool forceMessageMode = false;
+bool forceDebugMode = false;
+unsigned long lastButtonPress = 0;
+const unsigned long debounceDelay = 500;
+
 void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length);
 void connectWebSocket();
 void startAPMode();
 bool connectToWifi();
 int pickBestFontSize(String text);
-void processJson(String jsonStr);
+void processJson(String jsonStr, bool forceAndSave = true);
 void displayMessageLines(const std::vector<String>& lines, int size = 1, int x = 0, int y = 0);
 void loadSavedMessage();
+void updateDisplay();
 
 void setup() {
+  pinMode(MODE_BUTTON_PIN, INPUT_PULLUP);
   Wire.begin(D2, D1);
   Serial.begin(115200);
   while (!Serial) delay(10);
@@ -44,29 +58,45 @@ void setup() {
     Serial.println(F("Failed to mount LittleFS"));
     return;
   }
-  displayMessageLines({
-    "Connecting to WiFi...",
-  }, 2);
 
   if (!connectToWifi()) {
-    displayMessageLines({
-      "Failed to connect to WiFi",
-      "Starting AP mode..."
-    }, 2);
+    currentMode = MODE_DEBUG;
+    forceDebugMode = true;
+    Serial.println("[SETUP] WiFi failed, entering DEBUG mode");
+    updateDisplay();
     startAPMode();
   } else {
     connectWebSocket();
-    displayMessageLines({
-      "Connected to WiFi",
-      "Connecting to WebSocket..."
-    }, 2);
     delay(2000);
   }
-  loadSavedMessage();  // Load any saved message from LittleFS
 }
 
 void loop() {
   webSocket.loop();
+
+  if (digitalRead(MODE_BUTTON_PIN) == LOW) {
+    unsigned long now = millis();
+    if (now - lastButtonPress > debounceDelay) {
+      lastButtonPress = now;
+
+      currentMode = static_cast<DisplayMode>((currentMode + 1) % 3);
+      Serial.print("[BUTTON] Switched to mode: ");
+      Serial.println(currentMode);
+      updateDisplay();
+    }
+  }
+
+  if (forceMessageMode && currentMode != MODE_MESSAGE) {
+    Serial.println("[LOOP] Forcing MODE_MESSAGE");
+    forceMessageMode = false;
+    currentMode = MODE_MESSAGE;
+    updateDisplay();
+  } else if (forceDebugMode && currentMode != MODE_DEBUG) {
+    Serial.println("[LOOP] Forcing MODE_DEBUG");
+    forceDebugMode = false;
+    currentMode = MODE_DEBUG;
+    updateDisplay();
+  }
 }
 
 /*
@@ -83,16 +113,12 @@ void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
     case WStype_CONNECTED:
       Serial.println("[WS] Connected");
-      // displayMessageLines({
-      //   "WebSocket connected",
-      //   "Waiting for messages..."
-      // }, 2);
       webSocket.sendTXT("ESP8266 connected");
       break;
 
     case WStype_TEXT:
       Serial.printf("[WS] Received: %s\n", payload);
-      processJson(String((char*)payload));  // show on screen
+      processJson(String((char*)payload));
       break;
   }
 }
@@ -104,13 +130,12 @@ void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   It also sets a reconnection interval to attempt to reconnect if the connection is lost.
 */
 void connectWebSocket() {
-  // Replace with your server IP/domain and port
   const char* host = "192.168.198.155";
   const uint16_t port = 8765;
 
   webSocket.begin(host, port, "/");
   webSocket.onEvent(onWebSocketEvent);
-  webSocket.setReconnectInterval(5000); // Try to reconnect every 5s
+  webSocket.setReconnectInterval(5000);
 }
 
 /*
@@ -121,7 +146,6 @@ void connectWebSocket() {
 */
 void startAPMode() {
   WiFi.softAP("ESP-Setup");
-
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
@@ -184,22 +208,24 @@ bool connectToWifi() {
     Serial.println(F("Failed to open wifi.json"));
     return false;
   }
-  StaticJsonDocument<256> doc;  
+
+  StaticJsonDocument<256> doc;
   DeserializationError error = deserializeJson(doc, file);
+  file.close();
+
   if (error) {
     Serial.print(F("JSON Parse Error: "));
-    file.close();
+    Serial.println(error.c_str());
     return false;
   }
 
   const char* ssid = doc["ssid"];
   const char* password = doc["password"];
 
-  Serial.printf("Connecting to %s...",ssid);
+  Serial.printf("Connecting to %s...", ssid);
   WiFi.begin(ssid, password);
 
   int attempts = 0;
-
   while (WiFi.status() != WL_CONNECTED && attempts < WIFI_CONNECTION_MAX_ATTEMPTS) {
     delay(500);
     Serial.print(".");
@@ -207,12 +233,12 @@ bool connectToWifi() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println(F("Connected!"));
-    Serial.print(F("IP Address: "));
+    Serial.println("\n[WiFi] Connected!");
+    Serial.print("IP: ");
     Serial.println(WiFi.localIP());
     return true;
   } else {
-    Serial.println(F("Failed to connect to WiFi"));
+    Serial.println("\n[WiFi] Failed to connect");
     return false;
   }
 }
@@ -226,10 +252,8 @@ int pickBestFontSize(String text) {
   const int screenH = 64;
 
   for (int size = 4; size >= 1; size--) {
-    // each character is 6 pixels wide and 8 pixels tall at size 1
     int charW = 6 * size;
     int charH = 8 * size;
-
     int charsPerLine = screenW / charW;
     int linesPerScreen = screenH / charH;
     int maxChars = charsPerLine * linesPerScreen;
@@ -238,8 +262,7 @@ int pickBestFontSize(String text) {
       return size;
     }
   }
-
-  return 1; // default to smallest if nothing fits
+  return 1;
 }
 
 /*
@@ -251,12 +274,12 @@ int pickBestFontSize(String text) {
     "text": "<string>" // text to display
   }
 */
-void processJson(String jsonStr) {
+void processJson(String jsonStr, bool saveAndForce) {
   StaticJsonDocument<256> doc;
   DeserializationError error = deserializeJson(doc, jsonStr);
 
   if (error) {
-    Serial.print(F("JSON Parse Error: "));
+    Serial.print("[JSON] Parse Error: ");
     Serial.println(error.c_str());
     return;
   }
@@ -278,14 +301,18 @@ void processJson(String jsonStr) {
     display.display();
   }
 
-  // Save the message to LittleFS for later retrieval using loadSavedMessage()
   File file = LittleFS.open("/message.json", "w");
   if (file) {
     serializeJson(doc, file);
     file.close();
-    Serial.println("Message saved to /message.json");
+    Serial.println("[JSON] Saved to /message.json");
   } else {
-    Serial.println("Failed to save message");
+    Serial.println("[JSON] Failed to save message");
+  }
+
+  if (saveAndForce && currentMode != MODE_MESSAGE) {
+    forceMessageMode = true;
+    Serial.println("[JSON] Forcing MODE_MESSAGE");
   }
 }
 
@@ -321,7 +348,7 @@ void displayMessageLines(const std::vector<String>& lines, int size, int x, int 
 void loadSavedMessage() {
   File file = LittleFS.open("/message.json", "r");
   if (!file) {
-    Serial.println("No saved message to load.");
+    Serial.println("[LOAD] No saved message found.");
     return;
   }
 
@@ -330,12 +357,39 @@ void loadSavedMessage() {
   file.close();
 
   if (error) {
-    Serial.println("Failed to parse saved message.");
+    Serial.println("[LOAD] Failed to parse saved message.");
     return;
   }
 
-  // Reuse the same display logic
   String jsonStr;
   serializeJson(doc, jsonStr);
-  processJson(jsonStr);
+  processJson(jsonStr, false);
 }
+
+void updateDisplay() {
+  Serial.print("[DISPLAY] Updating mode: ");
+  Serial.println(currentMode);
+
+  display.clearDisplay();
+
+  switch (currentMode) {
+    case MODE_ROBOT_EYES:
+      displayMessageLines({ "Robot Eyes :)", "Face Mode" }, 2);
+      break;
+
+    case MODE_MESSAGE:
+      loadSavedMessage();
+      break;
+
+    case MODE_DEBUG:
+      displayMessageLines({
+        "WiFi: " + String(WiFi.isConnected() ? "Connected" : "Disconnected"),
+        "WebSocket: " + String(webSocket.isConnected() ? "Connected" : "Disconnected"),
+        "IP: " + WiFi.localIP().toString()
+      }, 1);
+      break;
+  }
+
+  display.display();
+}
+
