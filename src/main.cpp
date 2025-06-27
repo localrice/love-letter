@@ -8,7 +8,6 @@
 #include <ESPAsyncWebServer.h>
 #include <WebSocketsClient.h>
 
-
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
@@ -37,6 +36,7 @@ unsigned long lastButtonPress = 0;
 const unsigned long debounceDelay = 500;
 bool isInAPMode = false;
 
+// forward declarations
 void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length);
 void connectWebSocket();
 void startAPMode();
@@ -62,7 +62,6 @@ void setup() {
   roboEyes.setIdleMode(ON, 1.5, 0.5);         
   roboEyes.anim_confused();
   roboEyes.open();
-
 
   if (!LittleFS.begin()) {
     Serial.println(F("Failed to mount LittleFS"));
@@ -396,6 +395,11 @@ void loadSavedMessage() {
   processJson(jsonStr, false);
 }
 
+/*
+  Function to update the OLED display based on the current mode
+  This function clears the display and updates it according to the current mode.
+  It handles different modes like MODE_ROBOT_EYES, MODE_MESSAGE, and MODE_DEBUG.
+*/
 void updateDisplay() {
   Serial.print("[DISPLAY] Updating mode: ");
   Serial.println(currentMode);
