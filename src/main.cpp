@@ -70,7 +70,7 @@ void setup() {
 
   if (!connectToWifi()) {
     currentMode = MODE_DEBUG;
-    forceDebugMode = true;
+    forceDebugMode = false;
     Serial.println("[SETUP] WiFi failed, entering DEBUG mode");
     updateDisplay();
     startAPMode();
@@ -100,12 +100,16 @@ void loop() {
     forceMessageMode = false;
     currentMode = MODE_MESSAGE;
     updateDisplay();
-  } else if (forceDebugMode && currentMode != MODE_DEBUG) {
-    Serial.println("[LOOP] Forcing MODE_DEBUG");
-    forceDebugMode = false;
-    currentMode = MODE_DEBUG;
-    updateDisplay();
-  }
+  } else if (forceDebugMode) {
+      if (currentMode != MODE_DEBUG) {
+        Serial.println("[LOOP] Forcing MODE_DEBUG");
+        currentMode = MODE_DEBUG;
+        updateDisplay();
+      }
+      // Reset the flag **after first execution**
+      forceDebugMode = false;
+}
+
   if (currentMode== MODE_ROBOT_EYES) {
     roboEyes.update();
   }
