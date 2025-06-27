@@ -28,6 +28,7 @@ bool connectToWifi();
 int pickBestFontSize(String text);
 void processJson(String jsonStr);
 void displayMessageLines(const std::vector<String>& lines, int size = 1, int x = 0, int y = 0);
+void loadSavedMessage();
 
 void setup() {
   Wire.begin(D2, D1);
@@ -59,7 +60,9 @@ void setup() {
       "Connected to WiFi",
       "Connecting to WebSocket..."
     }, 2);
+    delay(2000);
   }
+  loadSavedMessage();  // Load any saved message from LittleFS
 }
 
 void loop() {
@@ -80,10 +83,10 @@ void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
     case WStype_CONNECTED:
       Serial.println("[WS] Connected");
-      displayMessageLines({
-        "WebSocket connected",
-        "Waiting for messages..."
-      }, 2);
+      // displayMessageLines({
+      //   "WebSocket connected",
+      //   "Waiting for messages..."
+      // }, 2);
       webSocket.sendTXT("ESP8266 connected");
       break;
 
@@ -274,6 +277,16 @@ void processJson(String jsonStr) {
     display.println(doc["text"].as<String>());
     display.display();
   }
+
+  // Save the message to LittleFS for later retrieval using loadSavedMessage()
+  File file = LittleFS.open("/message.json", "w");
+  if (file) {
+    serializeJson(doc, file);
+    file.close();
+    Serial.println("Message saved to /message.json");
+  } else {
+    Serial.println("Failed to save message");
+  }
 }
 
 /*
@@ -298,4 +311,31 @@ void displayMessageLines(const std::vector<String>& lines, int size, int x, int 
     display.println(line);
   }
   display.display();
+}
+
+/*
+  Function to load a saved message from LittleFS
+  This function reads a JSON file named "message.json" from the LittleFS filesystem
+  and displays the message on the OLED screen using the same logic as processJson().
+*/
+void loadSavedMessage() {
+  File file = LittleFS.open("/message.json", "r");
+  if (!file) {
+    Serial.println("No saved message to load.");
+    return;
+  }
+
+  StaticJsonDocument<256> doc;
+  DeserializationError error = deserializeJson(doc, file);
+  file.close();
+
+  if (error) {
+    Serial.println("Failed to parse saved message.");
+    return;
+  }
+
+  // Reuse the same display logic
+  String jsonStr;
+  serializeJson(doc, jsonStr);
+  processJson(jsonStr);
 }
