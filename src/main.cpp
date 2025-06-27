@@ -35,6 +35,7 @@ bool forceMessageMode = false;
 bool forceDebugMode = false;
 unsigned long lastButtonPress = 0;
 const unsigned long debounceDelay = 500;
+bool isInAPMode = false;
 
 void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length);
 void connectWebSocket();
@@ -160,12 +161,23 @@ void connectWebSocket() {
   This function sets up an access point with the SSID "ESP-Setup"
   and serves a simple HTML form to input WiFi credentials.
   When the form is submitted, it saves the credentials to LittleFS in a JSON file
+
+  Also displays debug info on the oled screen
 */
 void startAPMode() {
   WiFi.softAP("ESP-Setup");
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
+  isInAPMode = true;
+
+  String visitLine = "Visit: http://" + IP.toString() + "/";
+  displayMessageLines({
+    "WiFi Setup Mode",
+    "SSID: ESP-Setup",
+    visitLine,
+    "to configure WiFi"
+  }, 1);
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(200, "text/html", R"rawliteral(
@@ -402,11 +414,21 @@ void updateDisplay() {
       break;
 
     case MODE_DEBUG:
-      displayMessageLines({
-        "WiFi: " + String(WiFi.isConnected() ? "Connected" : "Disconnected"),
-        "WebSocket: " + String(webSocket.isConnected() ? "Connected" : "Disconnected"),
-        "IP: " + WiFi.localIP().toString()
-      }, 1);
+      if (isInAPMode) {
+        String visitLine = "Visit: http://" + WiFi.softAPIP().toString() + "/";
+        displayMessageLines({
+          "WiFi Setup Mode",
+          "SSID: ESP-Setup",
+          visitLine,
+          "to configure WiFi"
+        }, 1);
+      } else {
+        displayMessageLines({
+          "WiFi Status: " + String(WiFi.status()),
+          "IP: " + WiFi.localIP().toString(),
+          "Mode: DEBUG"
+        }, 1);
+      }
       break;
   }
 
