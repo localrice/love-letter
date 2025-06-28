@@ -17,6 +17,17 @@
 #define MODE_BUTTON_PIN 14 // D5 on NodeMCU
 #define TOUCH_PIN 12 // D6 on NodeMCU
 
+#define LOGO_WIDTH 32
+#define LOGO_HEIGHT 32
+
+const unsigned char newMessageBitmap [] PROGMEM = {
+  0x00, 0x00, 0x3C, 0x42, 0x81, 0xA5, 0x81, 0x99,
+  0x81, 0xA5, 0x42, 0x3C, 0x00, 0x00, 0x00, 0x00
+};
+
+bool isMessageUnread = false;  // Tracks if new message bitmap should be shown
+
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #include <FluxGarage_RoboEyes.h>
 roboEyes roboEyes(&display);
@@ -55,6 +66,7 @@ void displayMessageLines(const std::vector<String>& lines, int size = 1, int x =
 void loadSavedMessage();
 void updateDisplay();
 void changeMood(int mood);
+void showNewMessageAnimation();
 
 void setup() {
   pinMode(MODE_BUTTON_PIN, INPUT_PULLUP);
@@ -108,6 +120,14 @@ void setup() {
 
 void loop() {
   webSocket.loop();
+  if (currentMode == MODE_MESSAGE && digitalRead(TOUCH_PIN) == HIGH) {
+    if (isMessageUnread) {
+      Serial.println("[TOUCH] Message acknowledged. Showing actual message.");
+      isMessageUnread = false;
+      updateDisplay(); // Show the message now
+      delay(500); // debounce so it doesn't immediately register again
+    }
+  }
 
   if (digitalRead(MODE_BUTTON_PIN) == LOW) {
     unsigned long now = millis();
@@ -398,10 +418,12 @@ void processJson(String jsonStr, bool saveAndForce) {
     Serial.println("[JSON] Failed to save message");
   }
 
-  if (saveAndForce && currentMode != MODE_MESSAGE) {
-    forceMessageMode = true;
-    Serial.println("[JSON] Forcing MODE_MESSAGE");
+  if (saveAndForce) {
+    isMessageUnread = true;  // Mark new message as unread
+    forceMessageMode = true; // Force message mode display
+    Serial.println("[JSON] New message received. Forcing MODE_MESSAGE");
   }
+
 }
 
 /*
@@ -473,7 +495,11 @@ void updateDisplay() {
       break;
 
     case MODE_MESSAGE:
-      loadSavedMessage();
+      if (isMessageUnread) {
+        showNewMessageAnimation();
+      } else {
+        loadSavedMessage();
+      }
       break;
 
     case MODE_DEBUG:
@@ -518,4 +544,15 @@ void changeMood(int mood) {
       case ANGRY: Serial.println("ANGRY"); break;
     }
   }
+}
+
+/*
+  This function shows a logo on the screen to indicate a new message
+  It clears the display and draws a bitmap image of the logo in the center.
+*/
+void showNewMessageAnimation() {
+  display.clearDisplay();
+  display.drawBitmap((SCREEN_WIDTH - LOGO_WIDTH) / 2, (SCREEN_HEIGHT - LOGO_HEIGHT) / 2,
+                     newMessageBitmap, LOGO_WIDTH, LOGO_HEIGHT, SSD1306_WHITE);
+  display.display();
 }
