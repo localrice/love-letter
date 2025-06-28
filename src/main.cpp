@@ -13,8 +13,9 @@
 #define OLED_RESET -1
 #define SCREEN_ADDRESS 0x3C
 
-#define WIFI_CONNECTION_MAX_ATTEMPTS 100
+#define WIFI_CONNECTION_MAX_ATTEMPTS 150
 #define MODE_BUTTON_PIN 14 // D5 on NodeMCU
+#define TOUCH_PIN 12 // D6 on NodeMCU
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #include <FluxGarage_RoboEyes.h>
@@ -58,10 +59,14 @@ void setup() {
     while (true);
   }
   roboEyes.begin(SCREEN_WIDTH, SCREEN_HEIGHT, 60);  // 60 fps
+  roboEyes.setWidth(30, 30);
+  roboEyes.setHeight(30, 30);
+  roboEyes.setBorderradius(15, 15);
   roboEyes.setAutoblinker(ON, 1, 0.5);               
-  roboEyes.setIdleMode(ON, 1.5, 0.5);         
-  roboEyes.anim_confused();
+  roboEyes.setIdleMode(ON, 1.5, 0.5);   
+  // roboEyes.setCuriosity(ON);      
   roboEyes.open();
+  roboEyes.anim_confused();
 
   if (!LittleFS.begin()) {
     Serial.println(F("Failed to mount LittleFS"));
@@ -72,11 +77,23 @@ void setup() {
     currentMode = MODE_DEBUG;
     forceDebugMode = false;
     Serial.println("[SETUP] WiFi failed, entering DEBUG mode");
+
+    roboEyes.open();
+    roboEyes.setMood(TIRED);
+    roboEyes.setIdleMode(ON, 3, 2);
+
     updateDisplay();
     startAPMode();
   } else {
+    Serial.println("[SETUP] WiFi connected, switching to happy face");
+
+    roboEyes.open();
+    roboEyes.setMood(HAPPY);
+    roboEyes.anim_laugh();
+    roboEyes.setIdleMode(ON, 5, 3);
+
     connectWebSocket();
-    delay(2000);
+
   }
 }
 
@@ -170,13 +187,16 @@ void startAPMode() {
   Serial.println(IP);
   isInAPMode = true;
 
-  String visitLine = "Visit: http://" + IP.toString() + "/";
+  String visitLine = "http://" + IP.toString() + "/";
   displayMessageLines({
-    "WiFi Setup Mode",
-    "SSID: ESP-Setup",
-    visitLine,
-    "to configure WiFi"
-  }, 1);
+      "WiFi Setup Mode",
+      "Turn on your phone's WiFi and connect to",
+      "ESP-Setup",
+      "",
+      "Visit:",
+      visitLine,
+      "to configure WiFi"
+    }, 1);
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(200, "text/html", R"rawliteral(
@@ -255,7 +275,7 @@ bool connectToWifi() {
 
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < WIFI_CONNECTION_MAX_ATTEMPTS) {
-    delay(33);             // ~60 FPS for OLED
+    delay(40); // this changes the frame rate of the eyes animation during boot
     roboEyes.update();
     Serial.print(".");
     attempts++;
@@ -419,10 +439,13 @@ void updateDisplay() {
 
     case MODE_DEBUG:
       if (isInAPMode) {
-        String visitLine = "Visit: http://" + WiFi.softAPIP().toString() + "/";
+        String visitLine = "http://" + WiFi.softAPIP().toString() + "/";
         displayMessageLines({
           "WiFi Setup Mode",
-          "SSID: ESP-Setup",
+          "Turn on your phone's WiFi and connect to",
+          "ESP-Setup",
+          "",
+          "Visit:",
           visitLine,
           "to configure WiFi"
         }, 1);
