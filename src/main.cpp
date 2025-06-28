@@ -37,6 +37,13 @@ unsigned long lastButtonPress = 0;
 const unsigned long debounceDelay = 500;
 bool isInAPMode = false;
 
+// Mood system
+unsigned long lastMoodChange = 0;
+unsigned long moodInterval = 15000; // 15 seconds
+unsigned long happyUntil = 0;
+int currentMood = DEFAULT;
+bool isBeingPetted = false;
+
 // forward declarations
 void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length);
 void connectWebSocket();
@@ -47,9 +54,11 @@ void processJson(String jsonStr, bool forceAndSave = true);
 void displayMessageLines(const std::vector<String>& lines, int size = 1, int x = 0, int y = 0);
 void loadSavedMessage();
 void updateDisplay();
+void changeMood(int mood);
 
 void setup() {
   pinMode(MODE_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(TOUCH_PIN, INPUT);
   Wire.begin(D2, D1);
   Serial.begin(115200);
   while (!Serial) delay(10);
@@ -125,9 +134,39 @@ void loop() {
       }
       // Reset the flag **after first execution**
       forceDebugMode = false;
-}
+  }
 
-  if (currentMode== MODE_ROBOT_EYES) {
+  // if (currentMode== MODE_ROBOT_EYES) {
+  //   roboEyes.update();
+  // }
+  if (currentMode == MODE_ROBOT_EYES) {
+    unsigned long now = millis();
+    // Head pat sensor triggers happy mood
+    if (digitalRead(TOUCH_PIN) == HIGH) {
+      if (!isBeingPetted) {
+        Serial.println("[TOUCH] Head pat detected!");
+        isBeingPetted = true;
+        changeMood(HAPPY);
+        happyUntil = now + 5000; // Stay happy for 5s after last touch
+      }
+    } else {
+        isBeingPetted = false;
+    }
+    // If not being petted and happy timeout expired, change mood randomly
+    if (now > happyUntil && !isBeingPetted) {
+      if (now - lastMoodChange > moodInterval) {
+        lastMoodChange = now;
+        int moods[] = { DEFAULT, TIRED, ANGRY };
+        int nextMood;
+        do {
+          nextMood = moods[random(0, 3)];
+        } while (nextMood == currentMood); {
+          changeMood(nextMood);
+        }
+      }
+    }
+
+    // Update eyes
     roboEyes.update();
   }
   
@@ -462,3 +501,21 @@ void updateDisplay() {
   
 }
 
+/*
+  Function to change the mood of the robot eyes
+  This function changes the mood of the robot eyes and updates the display accordingly.
+  It also prints the new mood to the Serial monitor for debugging purposes.
+*/
+void changeMood(int mood) {
+  if (currentMood != mood) {
+    currentMood = mood;
+    roboEyes.setMood(mood);
+    Serial.print("[MOOD] Changed to: ");
+    switch (mood) {
+      case DEFAULT: Serial.println("DEFAULT"); break;
+      case HAPPY: Serial.println("HAPPY"); break;
+      case TIRED: Serial.println("TIRED"); break;
+      case ANGRY: Serial.println("ANGRY"); break;
+    }
+  }
+}
