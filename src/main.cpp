@@ -574,7 +574,7 @@ void updateDisplay() {
       // Draw title
       display.setTextSize(1);
       display.setTextColor(SSD1306_WHITE);
-      display.setCursor((SCREEN_WIDTH - 6 * strlen("LOVE LEDGER")) / 2, 4); // center-align "STATS"
+      display.setCursor((SCREEN_WIDTH - 6 * strlen("LOVE LEDGER")) / 2, 4);
       display.println("LOVE LEDGER");
 
       // Horizontal separator line
@@ -594,7 +594,7 @@ void updateDisplay() {
       display.println("Mood Swings: " + String(stats.moodSwings));
 
       display.setCursor(10, baseY + 3 * lineHeight);
-      display.println("Messages: " + String(stats.messagesReceived));
+      display.println("Messages Received: " + String(stats.messagesReceived));
 
       display.display();
       break;
