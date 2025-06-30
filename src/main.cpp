@@ -116,7 +116,8 @@ void setup() {
     Serial.println(F("Failed to mount LittleFS"));
     return;
   }
-
+  loadStats();
+  
   if (!connectToWifi()) {
     currentMode = MODE_DEBUG;
     forceDebugMode = false;
