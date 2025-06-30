@@ -17,6 +17,7 @@
 #define WIFI_CONNECTION_MAX_ATTEMPTS 150
 #define MODE_BUTTON_PIN 14 // D5 on NodeMCU
 #define TOUCH_PIN 12 // D6 on NodeMCU
+#define MISS_BUTTON_PIN 13  // D7 on NodeMCU
 
 // Display message feature animation settings
 #define LOGO_WIDTH 128
@@ -69,10 +70,15 @@ void updateDisplay();
 void changeMood(int mood);
 void showNewMessageLogo();
 void playFullAnimation();
+void handleSecondButtonPress();
+int readMissedPresses();
+void writeMissedPresses(int count);
 
 void setup() {
   pinMode(MODE_BUTTON_PIN, INPUT_PULLUP);
   pinMode(TOUCH_PIN, INPUT);
+  pinMode(MISS_BUTTON_PIN, INPUT_PULLUP);
+
   Wire.begin(D2, D1);
   Serial.begin(115200);
   while (!Serial) delay(10);
@@ -149,6 +155,16 @@ void loop() {
     }
   }
 
+  static unsigned long lastMissPress = 0;
+  if (digitalRead(MISS_BUTTON_PIN) == LOW) {
+    unsigned long now = millis();
+    if (now - lastMissPress > debounceDelay) {
+      lastMissPress = now;
+      handleSecondButtonPress();
+    }
+  }
+
+
   if (forceMessageMode) {
     forceMessageMode = false;
 
@@ -214,10 +230,21 @@ void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       break;
 
     case WStype_CONNECTED:
+    {
       Serial.println("[WS] Connected");
       webSocket.sendTXT("ESP8266 connected");
-      break;
 
+      int missed = readMissedPresses();
+      if (missed > 0) {
+        for (int i = 0; i < missed; i++) {
+          webSocket.sendTXT("{\"type\": \"miss_you_button\"}");
+          delay(100); // slight delay to avoid overwhelming server
+        }
+        Serial.printf("[WS] Sent %d stored 'miss_you_button' events\n", missed);
+        writeMissedPresses(0); // Clear stored count
+      }
+      break;
+    }
     case WStype_TEXT:
       Serial.printf("[WS] Received: %s\n", payload);
       processJson(String((char*)payload));
@@ -578,5 +605,34 @@ void playFullAnimation() {
     display.drawBitmap(0, 0, messageAnimation[i], LOGO_WIDTH, LOGO_HEIGHT, SSD1306_WHITE);
     display.display();
     delay(frameDurationMs);
+  }
+}
+
+int readMissedPresses() {
+  File file = LittleFS.open("/missed_presses.txt", "r");
+  if (!file) return 0;
+  int count = file.parseInt();
+  file.close();
+  return count;
+}
+
+void writeMissedPresses(int count) {
+  File file = LittleFS.open("/missed_presses.txt", "w");
+  if (file) {
+    file.print(count);
+    file.close();
+  }
+}
+
+void handleSecondButtonPress() {
+  if (webSocket.isConnected()) {
+    // Send event to server
+    webSocket.sendTXT("{\"type\": \"miss_you_button\"}");
+    Serial.println("[BUTTON2] Sent miss_you_button");
+  } else {
+    // Save press for later
+    int current = readMissedPresses();
+    writeMissedPresses(current + 1);
+    Serial.println("[BUTTON2] Stored offline miss_you_button");
   }
 }
