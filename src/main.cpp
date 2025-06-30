@@ -363,16 +363,8 @@ void startAPMode() {
     }, 1);
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(200, "text/html", R"rawliteral(
-      <h2>WiFi Setup</h2>
-      <form action="/save" method="POST">
-        SSID:<br><input type="text" name="ssid"><br>
-        Password:<br><input type="password" name="password"><br><br>
-        <input type="submit" value="Save">
-      </form>
-    )rawliteral");
+    request->send(LittleFS, "/index.html", "text/html");
   });
-
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
     if (!request->hasParam("ssid", true) || !request->hasParam("password", true)) {
       request->send(400, "text/plain", "Missing parameters");
@@ -399,6 +391,7 @@ void startAPMode() {
     delay(3000);
     ESP.restart();
   });
+  server.serveStatic("/", LittleFS, "/"); // Serve files from LittleFS
 
   server.begin();
 }

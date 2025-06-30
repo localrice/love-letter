@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LoveBox WiFi Setup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      background: linear-gradient(135deg, #f9e7ff 0%, #e3f6fd 100%);
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Segoe UI', 'Arial', sans-serif;
+    }
+    .container {
+      background: #fff;
+      padding: 2.5em 2em 2em 2em;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      max-width: 350px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .letter-icon {
+      font-size: 3em;
+      margin-bottom: 0.2em;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 1.2em;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #7c3aed;
+    }
+    form {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .input-group {
+      width: 100%;
+      margin-bottom: 1em;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    label {
+      font-size: 1em;
+      margin-bottom: 0.3em;
+      color: #444;
+      font-weight: 500;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 0.7em;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 1em;
+      background: #f8fafc;
+      transition: border 0.2s;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border: 1.5px solid #7c3aed;
+      outline: none;
+      background: #fff;
+    }
+    .show-password-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      margin-bottom: 1em;
+      font-size: 0.98em;
+      color: #666;
+      user-select: none;
+    }
+    .show-password-row input[type="checkbox"] {
+      margin-right: 0.5em;
+      accent-color: #7c3aed;
+    }
+    button[type="submit"] {
+      width: 100%;
+      padding: 0.8em;
+      background: linear-gradient(90deg, #7c3aed 60%, #38bdf8 100%);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1.1em;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(124,58,237,0.08);
+      transition: background 0.2s, transform 0.1s;
+    }
+    button[type="submit"]:hover {
+      background: linear-gradient(90deg, #38bdf8 0%, #7c3aed 100%);
+      /* transform: translateY(-2px) scale(1.03); */
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="letter-icon">💌</div>
+    <h2>Connect Your LoveBox</h2>
+    <form action="/save" method="POST" autocomplete="off">
+      <div class="input-group">
+        <label for="ssid">WiFi Name (SSID):</label>
+        <input type="text" id="ssid" name="ssid" required>
+      </div>
+      <div class="input-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <div class="show-password-row">
+        <input type="checkbox" id="showPassword" onclick="togglePassword()">
+        <label for="showPassword" style="cursor:pointer;">Show Password</label>
+      </div>
+      <button type="submit">Save & Reboot</button>
+    </form>
+  </div>
+  <script>
+    function togglePassword() {
+      var pwd = document.getElementById("password");
+      pwd.type = pwd.type === "password" ? "text" : "password";
+    }
+  </script>
+</body>
+</html>
