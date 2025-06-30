@@ -7,6 +7,7 @@
 #include <ESP8266WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <WebSocketsClient.h>
+#include <message_animaiton_frames.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -17,20 +18,20 @@
 #define MODE_BUTTON_PIN 14 // D5 on NodeMCU
 #define TOUCH_PIN 12 // D6 on NodeMCU
 
-#define LOGO_WIDTH 32
-#define LOGO_HEIGHT 32
+// Display message feature animation settings
+#define LOGO_WIDTH 128
+#define LOGO_HEIGHT 64
+#define MAX_FRAMES 50
 
-const unsigned char newMessageBitmap [] PROGMEM = {
-  0x00, 0x00, 0x3C, 0x42, 0x81, 0xA5, 0x81, 0x99,
-  0x81, 0xA5, 0x42, 0x3C, 0x00, 0x00, 0x00, 0x00
-};
-
+const unsigned long frameDurationMs = 250;  // show each frame for 200ms
+const unsigned char* animationFrames[MAX_FRAMES]; // pointers to bitmaps
+uint8_t totalFrames = 0;  // how many actual frames are loaded
 bool isMessageUnread = false;  // Tracks if new message bitmap should be shown
 
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #include <FluxGarage_RoboEyes.h>
-roboEyes roboEyes(&display);
+roboEyes roboEyes;
 
 WebSocketsClient webSocket;
 AsyncWebServer server(80);
@@ -67,6 +68,7 @@ void loadSavedMessage();
 void updateDisplay();
 void changeMood(int mood);
 void showNewMessageAnimation();
+void playFullAnimation();
 
 void setup() {
   pinMode(MODE_BUTTON_PIN, INPUT_PULLUP);
@@ -122,10 +124,16 @@ void loop() {
   webSocket.loop();
   if (currentMode == MODE_MESSAGE && digitalRead(TOUCH_PIN) == HIGH) {
     if (isMessageUnread) {
-      Serial.println("[TOUCH] Message acknowledged. Showing actual message.");
+      Serial.println("[TOUCH] Acknowledged. Playing animation before message.");
+
       isMessageUnread = false;
-      updateDisplay(); // Show the message now
-      delay(500); // debounce so it doesn't immediately register again
+
+      // Play animation before showing message
+      playFullAnimation();
+    
+      delay(500);  // brief pause before message appears
+      updateDisplay();  // will now load saved message
+      delay(500);  // debounce
     }
   }
 
@@ -141,10 +149,14 @@ void loop() {
     }
   }
 
-  if (forceMessageMode && currentMode != MODE_MESSAGE) {
-    Serial.println("[LOOP] Forcing MODE_MESSAGE");
+  if (forceMessageMode) {
     forceMessageMode = false;
-    currentMode = MODE_MESSAGE;
+
+    if (currentMode != MODE_MESSAGE) {
+      Serial.println("[LOOP] Forcing MODE_MESSAGE");
+      currentMode = MODE_MESSAGE;
+    }
+
     updateDisplay();
   } else if (forceDebugMode) {
       if (currentMode != MODE_DEBUG) {
@@ -553,6 +565,17 @@ void changeMood(int mood) {
 void showNewMessageAnimation() {
   display.clearDisplay();
   display.drawBitmap((SCREEN_WIDTH - LOGO_WIDTH) / 2, (SCREEN_HEIGHT - LOGO_HEIGHT) / 2,
-                     newMessageBitmap, LOGO_WIDTH, LOGO_HEIGHT, SSD1306_WHITE);
+                    messageAnimation[0], LOGO_WIDTH, LOGO_HEIGHT, SSD1306_WHITE);
   display.display();
+}
+
+void playFullAnimation() {
+  Serial.println("[ANIMATION] Playing message animation");
+
+  for (uint8_t i = 0; i < messageAnimationFrameCount; i++) {
+    display.clearDisplay();
+    display.drawBitmap(0, 0, messageAnimation[i], LOGO_WIDTH, LOGO_HEIGHT, SSD1306_WHITE);
+    display.display();
+    delay(frameDurationMs);
+  }
 }
