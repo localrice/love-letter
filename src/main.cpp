@@ -81,6 +81,12 @@ void playFullAnimation();
 void handleSecondButtonPress();
 int readMissedPresses();
 void writeMissedPresses(int count);
+void loadStats();
+void saveStats();
+void incrementHeadpats();
+void incrementMissYouPresses();
+void incrementMoodSwings();
+void incrementMessagesReceived();
 
 void setup() {
   pinMode(MODE_BUTTON_PIN, INPUT_PULLUP);
@@ -169,7 +175,7 @@ void loop() {
     if (now - lastMissPress > debounceDelay) {
       lastMissPress = now;
       handleSecondButtonPress();
-      stats.missYouPresses++;
+      incrementMissYouPresses();
     }
   }
 
@@ -200,9 +206,10 @@ void loop() {
       if (!isBeingPetted) {
         Serial.println("[TOUCH] Head pat detected!");
         isBeingPetted = true;
+        roboEyes.anim_laugh();
         changeMood(HAPPY);
         happyUntil = now + 5000; // Stay happy for 5s after last touch
-        stats.headpats++;
+        incrementHeadpats();
       }
     } else {
         isBeingPetted = false;
@@ -217,7 +224,7 @@ void loop() {
           nextMood = moods[random(0, 3)];
         } while (nextMood == currentMood); {
           changeMood(nextMood);
-          stats.moodSwings++;
+          incrementMoodSwings();
         }
       }
     }
@@ -267,7 +274,7 @@ void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     }
     case WStype_TEXT:
       Serial.printf("[WS] Received: %s\n", payload);
-      stats.messagesReceived++;
+      incrementMessagesReceived();
       processJson(String((char*)payload));
       break;
   }
@@ -594,12 +601,12 @@ void updateDisplay() {
       display.println("Mood Swings: " + String(stats.moodSwings));
 
       display.setCursor(10, baseY + 3 * lineHeight);
-      display.println("Messages Received: " + String(stats.messagesReceived));
-
+      display.println("Love Notes: " + String(stats.messagesReceived));
       display.display();
       break;
     }
     case MODE_DEBUG:
+    {
       if (isInAPMode) {
         String visitLine = "http://" + WiFi.softAPIP().toString() + "/";
         displayMessageLines({
@@ -619,6 +626,7 @@ void updateDisplay() {
         }, 1);
       }
       break;
+    }
   }
 
   
@@ -702,4 +710,65 @@ void handleSecondButtonPress() {
     writeMissedPresses(current + 1);
     Serial.println("[BUTTON2] Stored offline miss_you_button");
   }
+}
+
+void loadStats() {
+  File file = LittleFS.open("/stats.json", "r");
+  if (!file) {
+    Serial.println("[STATS] No existing stats file. Starting fresh.");
+    return;
+  }
+
+  StaticJsonDocument<128> doc;
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+
+  if (err) {
+    Serial.println("[STATS] Failed to parse stats.json");
+    return;
+  }
+
+  stats.headpats = doc["headpats"] | 0;
+  stats.missYouPresses = doc["missYouPresses"] | 0;
+  stats.moodSwings = doc["moodSwings"] | 0;
+  stats.messagesReceived = doc["messagesReceived"] | 0;
+  Serial.println("[STATS] Loaded from file");
+}
+
+void saveStats() {
+  StaticJsonDocument<128> doc;
+  doc["headpats"] = stats.headpats;
+  doc["missYouPresses"] = stats.missYouPresses;
+  doc["moodSwings"] = stats.moodSwings;
+  doc["messagesReceived"] = stats.messagesReceived;
+
+  File file = LittleFS.open("/stats.json", "w");
+  if (!file) {
+    Serial.println("[STATS] Failed to open stats.json for writing");
+    return;
+  }
+
+  serializeJson(doc, file);
+  file.close();
+  Serial.println("[STATS] Saved to file");
+}
+
+void incrementHeadpats() {
+  stats.headpats++;
+  saveStats();
+}
+
+void incrementMissYouPresses() {
+  stats.missYouPresses++;
+  saveStats();
+}
+
+void incrementMoodSwings() {
+  stats.moodSwings++;
+  saveStats();
+}
+
+void incrementMessagesReceived() {
+  stats.messagesReceived++;
+  saveStats();
 }
