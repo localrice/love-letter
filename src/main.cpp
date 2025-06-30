@@ -67,7 +67,7 @@ void displayMessageLines(const std::vector<String>& lines, int size = 1, int x =
 void loadSavedMessage();
 void updateDisplay();
 void changeMood(int mood);
-void showNewMessageAnimation();
+void showNewMessageLogo();
 void playFullAnimation();
 
 void setup() {
@@ -168,9 +168,6 @@ void loop() {
       forceDebugMode = false;
   }
 
-  // if (currentMode== MODE_ROBOT_EYES) {
-  //   roboEyes.update();
-  // }
   if (currentMode == MODE_ROBOT_EYES) {
     unsigned long now = millis();
     // Head pat sensor triggers happy mood
@@ -503,12 +500,11 @@ void updateDisplay() {
 
   switch (currentMode) {
     case MODE_ROBOT_EYES:
-      // displayMessageLines({ "Robot Eyes :)", "Face Mode" }, 2);
       break;
 
     case MODE_MESSAGE:
       if (isMessageUnread) {
-        showNewMessageAnimation();
+        showNewMessageLogo();
       } else {
         loadSavedMessage();
       }
@@ -562,13 +558,18 @@ void changeMood(int mood) {
   This function shows a logo on the screen to indicate a new message
   It clears the display and draws a bitmap image of the logo in the center.
 */
-void showNewMessageAnimation() {
+void showNewMessageLogo() {
   display.clearDisplay();
   display.drawBitmap((SCREEN_WIDTH - LOGO_WIDTH) / 2, (SCREEN_HEIGHT - LOGO_HEIGHT) / 2,
                     messageAnimation[0], LOGO_WIDTH, LOGO_HEIGHT, SSD1306_WHITE);
   display.display();
 }
 
+/*
+  Function to play the full message animation
+  This function iterates through all frames of the message animation and displays them one by one.
+  It clears the display before each frame and waits for a specified duration between frames.
+*/
 void playFullAnimation() {
   Serial.println("[ANIMATION] Playing message animation");
 
