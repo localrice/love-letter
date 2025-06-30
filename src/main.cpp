@@ -8,6 +8,7 @@
 #include <ESPAsyncWebServer.h>
 #include <WebSocketsClient.h>
 #include <message_animaiton_frames.h>
+#include <time.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -137,7 +138,20 @@ void setup() {
 
     connectWebSocket();
 
+    // Set timezone (IST: UTC+5:30)
+    configTime(19800, 0, "pool.ntp.org", "time.nist.gov");
+
+    Serial.print("[TIME] Waiting for NTP time");
+    time_t now = time(nullptr);
+    while (now < 100000)
+    {
+      delay(500);
+      Serial.print(".");
+      now = time(nullptr);
+    }
+    Serial.println("\n[TIME] Time synced!");
   }
+
 }
 
 void loop() {
@@ -215,16 +229,42 @@ void loop() {
         isBeingPetted = false;
     }
     // If not being petted and happy timeout expired, change mood randomly
-    if (now > happyUntil && !isBeingPetted) {
-      if (now - lastMoodChange > moodInterval) {
-        lastMoodChange = now;
-        int moods[] = { DEFAULT, TIRED, ANGRY };
-        int nextMood;
-        do {
-          nextMood = moods[random(0, 3)];
-        } while (nextMood == currentMood); {
+    if (!isBeingPetted && now > happyUntil) {
+      if (WiFi.status() == WL_CONNECTED)  {
+        struct tm timeinfo;
+        if (getLocalTime(&timeinfo))  {
+          int hour = timeinfo.tm_hour;
+
+          if (hour >= 22 || hour < 6) {
+            if (currentMood != TIRED) {
+              changeMood(TIRED);
+            }
+          }
+          else if (now - lastMoodChange > moodInterval) {
+            int moods[] = {DEFAULT, TIRED, ANGRY};
+            int nextMood;
+            do {
+              nextMood = moods[random(0, 3)];
+            } while (nextMood == currentMood);
+
+            changeMood(nextMood);
+            incrementMoodSwings();
+            lastMoodChange = now;
+          }
+        }
+      }
+      else  {
+        // If time not available, fallback to random mood
+        if (now - lastMoodChange > moodInterval)  {
+          int moods[] = {DEFAULT, TIRED, ANGRY};
+          int nextMood;
+          do  {
+            nextMood = moods[random(0, 3)];
+          } while (nextMood == currentMood);
+
           changeMood(nextMood);
           incrementMoodSwings();
+          lastMoodChange = now;
         }
       }
     }
