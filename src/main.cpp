@@ -40,8 +40,16 @@ AsyncWebServer server(80);
 enum DisplayMode {
   MODE_ROBOT_EYES,
   MODE_MESSAGE,
+  MODE_STATS,
   MODE_DEBUG
 };
+
+struct Stats {
+  int headpats;
+  int missYouPresses;
+  int moodSwings;
+  int messagesReceived;
+} stats;
 
 DisplayMode currentMode = MODE_ROBOT_EYES;
 bool forceMessageMode = false;
@@ -148,7 +156,7 @@ void loop() {
     if (now - lastButtonPress > debounceDelay) {
       lastButtonPress = now;
 
-      currentMode = static_cast<DisplayMode>((currentMode + 1) % 3);
+      currentMode = static_cast<DisplayMode>((currentMode + 1) % 4);
       Serial.print("[BUTTON] Switched to mode: ");
       Serial.println(currentMode);
       updateDisplay();
@@ -161,6 +169,7 @@ void loop() {
     if (now - lastMissPress > debounceDelay) {
       lastMissPress = now;
       handleSecondButtonPress();
+      stats.missYouPresses++;
     }
   }
 
@@ -193,6 +202,7 @@ void loop() {
         isBeingPetted = true;
         changeMood(HAPPY);
         happyUntil = now + 5000; // Stay happy for 5s after last touch
+        stats.headpats++;
       }
     } else {
         isBeingPetted = false;
@@ -207,6 +217,7 @@ void loop() {
           nextMood = moods[random(0, 3)];
         } while (nextMood == currentMood); {
           changeMood(nextMood);
+          stats.moodSwings++;
         }
       }
     }
@@ -214,7 +225,16 @@ void loop() {
     // Update eyes
     roboEyes.update();
   }
-  
+  // Update stats display every 500ms if in stats mode
+  static unsigned long lastStatsRefresh = 0;
+  if (currentMode == MODE_STATS) {
+    unsigned long now = millis();
+    if (now - lastStatsRefresh > 500) {
+      updateDisplay();
+      lastStatsRefresh = now;
+    }
+  }
+
 }
 
 /*
@@ -247,6 +267,7 @@ void onWebSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     }
     case WStype_TEXT:
       Serial.printf("[WS] Received: %s\n", payload);
+      stats.messagesReceived++;
       processJson(String((char*)payload));
       break;
   }
@@ -536,7 +557,48 @@ void updateDisplay() {
         loadSavedMessage();
       }
       break;
+    case MODE_STATS:
+    {
+      display.clearDisplay();
 
+      // Draw border box
+      display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
+
+      // Decorative corner circles
+      int r = 3; // radius
+      display.fillCircle(0, 0, r, SSD1306_WHITE);
+      display.fillCircle(SCREEN_WIDTH - 1, 0, r, SSD1306_WHITE);
+      display.fillCircle(0, SCREEN_HEIGHT - 1, r, SSD1306_WHITE);
+      display.fillCircle(SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1, r, SSD1306_WHITE);
+
+      // Draw title
+      display.setTextSize(1);
+      display.setTextColor(SSD1306_WHITE);
+      display.setCursor((SCREEN_WIDTH - 6 * strlen("LOVE LEDGER")) / 2, 4); // center-align "STATS"
+      display.println("LOVE LEDGER");
+
+      // Horizontal separator line
+      display.drawLine(0, 14, SCREEN_WIDTH, 14, SSD1306_WHITE);
+
+      // Display stat lines (evenly spaced)
+      int baseY = 18;
+      int lineHeight = 11;
+
+      display.setCursor(10, baseY);
+      display.println("Headpats: " + String(stats.headpats));
+
+      display.setCursor(10, baseY + lineHeight);
+      display.println("Missed him: " + String(stats.missYouPresses));
+
+      display.setCursor(10, baseY + 2 * lineHeight);
+      display.println("Mood Swings: " + String(stats.moodSwings));
+
+      display.setCursor(10, baseY + 3 * lineHeight);
+      display.println("Messages: " + String(stats.messagesReceived));
+
+      display.display();
+      break;
+    }
     case MODE_DEBUG:
       if (isInAPMode) {
         String visitLine = "http://" + WiFi.softAPIP().toString() + "/";
@@ -616,6 +678,11 @@ int readMissedPresses() {
   return count;
 }
 
+/*
+  Function to write the number of missed button presses to a file
+  This function saves the count of missed button presses to a file named "missed_presses.txt" in LittleFS.
+  It overwrites the file with the new count.
+*/
 void writeMissedPresses(int count) {
   File file = LittleFS.open("/missed_presses.txt", "w");
   if (file) {
