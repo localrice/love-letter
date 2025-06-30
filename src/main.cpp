@@ -117,7 +117,7 @@ void setup() {
     return;
   }
   loadStats();
-  
+
   if (!connectToWifi()) {
     currentMode = MODE_DEBUG;
     forceDebugMode = false;
@@ -776,6 +776,19 @@ void loadStats() {
   Serial.println("[STATS] Loaded from file");
 }
 
+/*
+  Function to save the current stats to a JSON file
+  This function writes the current stats to a file named "stats.json" in LittleFS.
+  It creates the file if it doesn't exist or overwrites it if it does.
+
+  Format:
+  {
+    "headpats": <int>,
+    "missYouPresses": <int>,
+    "moodSwings": <int>,
+    "messagesReceived": <int>
+  }
+*/
 void saveStats() {
   StaticJsonDocument<128> doc;
   doc["headpats"] = stats.headpats;
